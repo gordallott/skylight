@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -38,17 +39,31 @@ func init() {
 	}
 	cacheDir = filepath.Join(cacheDir, "skylight")
 
-	if v := os.Getenv("HOME"); v != "" {
-		confDir = filepath.Join(v, ".config")
+	if v, ok := os.LookupEnv("CONFDIR"); ok {
+		fmt.Println("docker override")
+		// docker running override, stuff everything in confdir
+		confDir = v
+		cacheDir = filepath.Join(confDir, ".cache")
+	} else if v := os.Getenv("HOME"); v != "" {
+		confDir = filepath.Join(v, ".config", "skylight")
 	}
-	confDir = filepath.Join(confDir, "skylight")
 
 	authFileLocation = filepath.Join(cacheDir, "auth.toml")
 	configFileLocation = filepath.Join(confDir, "config.toml")
+
+	fmt.Printf("authFileLocation: %s\nconfigFileLocation: %s\n", authFileLocation, configFileLocation)
 }
 
 func getClient(token string) (client.AuroraClient, string, error) {
-	hosts, err := client.Disocver(5 * time.Second)
+	hosts, err := client.Disocver(20 * time.Second)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if len(hosts) < 1 {
+		return nil, "", errors.New("no clients found")
+	}
+
 	if token == "" {
 		client, err := client.New(hosts[0])
 		return client, hosts[0], err
